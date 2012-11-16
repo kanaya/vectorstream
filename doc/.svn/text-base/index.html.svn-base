@@ -1,0 +1,540 @@
+<!DOCTYPE HTML PUBLIC "-//W3C/DTD HTML 4.01//EN"
+	  "http://www.w3.org/TR/html4/strict.dtd">
+
+<HTML>
+  <HEAD>
+    <TITLE>Vector Stream</TITLE>
+  </HEAD>
+  <BODY>
+    <H1>VECTOR STREAM LIBRARY AND TOOLS</H1>
+    <P>
+      Copyright (C) 2002-2008 by Ichiroh Kanaya,
+      <A href="http://www.pineappledesign.org/">PineappleDesign.org</A>
+    </P>
+    <P>
+      This program is free software: you can redistribute it and/or
+      modify it under the terms of the GNU General Public License as
+      published by the Free Software Foundation, either version 3 of
+      the License, or (at your option) any later version.
+    </P>
+    <P>
+      This program is distributed in the hope that it will be useful,
+      but WITHOUT ANY WARRANTY; without even the implied warranty of
+      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+      GNU General Public License for more details.
+    </P>
+    <P>
+      You should have received a copy of the GNU General Public
+      License along with this program.  If not,
+      see <A href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</A>.
+    </P>
+    <HR/>
+    <H1>0. About This Document</H1>
+    <P>
+      This document describes how to use <EM>Vector Stream</EM>
+      library and tools, that are distributed under GPLv3 by Ichiroh
+      Kanaya.
+    </P>
+    <H1>1. Vector Stream File Format</H1>
+    <P>
+      <EM>Vector Stream</EM> provides file I/O APIs of vectors
+      (sequence of numbers) for the standard C language.  Vector
+      Stream library stores C-style value array (<code>float</code>
+      and <code>double</code> are supported at this moment) to a file
+      specified by a pointer to <code>FILE</code> structure in its
+      unique format.
+    </P>
+    <P>
+      The file format provided by Vector Stream (vector file format)
+      is quite simple, human-readable, and yet gives efficiency of
+      streaming (file I/O).
+    </P>
+    <P>
+      Before presenting the format itself, let us see how the Vector
+      Stream library works in your C-code.
+    </P>
+    <H2>1.1 What is Vector Stream library?</H2>
+    <P>
+      By using the Vector Stream library, you can read/write arrays of
+      numbers from/to a file with no pain.  For example, if you have
+      an array of float like
+      <PRE>
+	#define N 10
+	float x[N] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+      </PRE>
+      then you can put it onto a file as follows.
+      <PRE>
+	vec_put_float_vector_to_file(N, x, 1, stdout);
+      </PRE>
+      The format of the file created here is called "vector file
+      format".  Once the vector file created, you can read it as
+      follows.
+      <PRE>
+	size_t n;
+	float *y;
+	vec_new_float_vector_from_file(&n, &y, stdin);
+	some_function(y[0], y[1], y[2]);
+	/* ... */
+      </PRE>
+      Memory allocation is automatically done. After usage
+      of <code>y</code>, you are required to free the memory manually.
+      <PRE>
+	/* ... */
+	vec_delete_float_vector(y);
+      </PRE>
+      This is C.
+    </P>
+    <H2>1.2 What is Vector Stream file format?</H2>
+    <P>
+      The Vector Stream file format is quite simple, human-readable,
+      yet supports efficient implementation of streamng library.  The
+      key idea of the vector fire format is to have <EM>minimum</EM>
+      requirement to hold numerical arrays.
+    </P>
+    <P>
+      First, vector file is a text file.  You can put only the
+      follwoing terms in the file.
+      <UL>
+	<LI>Whitespace: [ \t]</LI>
+	<LI>Newline: \n</LI>
+	<LI>Real number in text: -?[0-9]*([.]?[0-9]*)?([eE]-?[0-9]+)?</LI>
+	<LI>Special keyword <CODE>nil</CODE></LI>
+	<LI>Comment: %.*$</LI>
+      </UL>
+      In the comment area, you can put ASCII (and its compatible)
+      characters.  (The vector format parser searches \n character
+      when it enters comment sequence, so that you are likely to able
+      to put JIS, EUC, and other ASCII-like codes.)
+    </P>
+    <P>
+      Second, the Vector Stream file can only contains 1-dimensional
+      array.  Remember that multi-dimensional array is avoidable in
+      most scientific fields.  Multi-dimensional array is needed only
+      if its elements has variable (or multiple) lengths.  For this
+      perpose, you may want to use object collection mechanism that
+      you can see in Objective-C or in Java.
+    </P>
+    <P>
+      Third, you must start the number of elements before putting the
+      elements of the array themselves.  For example, if you have an
+      array [0 1 2 3], then you must put
+      <PRE>
+	4 0 1 2 3
+      </PRE>
+      into the file.  This can greatly reduce memory allocation cost
+      in the library since the library will know how much the array
+      size will be.
+    </P>
+    <P>
+      You can put comment anywhere. For example, the following is an
+      example of valid Vector Stream file.
+      <PRE>
+	% Comment started from the begining of the line
+	4 % Number of elements
+	1 % The first element
+	  % This is blank line.
+	2 3 % The second and third elements.
+	% File end.
+      </PRE>
+    </P>
+    <P>
+      Fourth, you are encouraged to start all vector files with this
+      header.
+      <PRE>
+	%!VCTR
+	%-format=1.2
+      </PRE>
+      The author also recommend that the filenames of all vector files end
+      with ".v" suffixes.
+    </P>
+    <P>
+      Fifth, you are allowed to give some hints and messages to the
+      vector files by the special form of comments as follows.
+      <PRE>
+	%?Hello, world.
+	%*option=123
+      </PRE>
+      The message started with <CODE>%?</CODE> might be printed on the
+      console during the processing by Vector Stream tools, might be
+      passed to the <EM>next</EM> vector file if the process formed
+      pipeline.  The option string started with <CODE>%*</CODE> might
+      be analized by Vector Stream tools; for example, the option
+      string could hold <EM>stride</EM> of the vector like the
+      following sample that is meaning ([1 2 3], [10 20 30], [100 200 300]).
+      <PRE>
+	%!VCTR
+	%-format=1.2
+	%*dimension=3
+	%*cardinality=3
+	%*minimum=1:2:3
+	%*maximum=100:200:300
+	%*average=37:74:111
+	9 % Number of elements (3-dimensional vector x 3)
+	1 2 3 % The first vector
+	10 20 30 % The second vector
+	100 200 300 % The third vector
+	% End of file.
+      </PRE>
+    </P>
+    <H2>1.3 Revision history of Vector file format</H2>
+    <P>
+      The erly version of vector file format is proposed by the author
+      in 2002, for the purpose of his research. In 2008, the format
+      has been slightly modified while keeping backward comaptibility
+      to the previous versions.
+    </P>
+    <H3>Format version 1.2</H3>
+    <P>
+      The vector file format version 1.2 was designed in 2008.
+      <ul>
+	<LI><CODE>%*</CODE> metadata field appeared.</LI>
+	<LI><CODE>%?</CODE> message field appeared.</LI>
+	<LI>You can put <CODE>nil</CODE> for empty vector, instead
+	of <CODE>0</CODE> vector.</LI>
+      </ul>
+    </P>
+    <H3>Format version 1.1</H3>
+    <P>
+      The vector file format version 1.1 was designed in 2002. The
+      version 1.1 of the format has the following features.
+      <ul>
+	<LI><CODE>%!VCTR</CODE> header appeared.</LI>
+	<LI><CODE>%-format=1.1</CODE> format identifier appeared.</LI>
+	<LI>You can put comment anywhere from this version.</LI>
+	<LI>No metadata except for comment supported.</LI>
+      </ul>
+    </P>
+    <H3>Format version 1.0</H3>
+    <P>
+      The vector file format was originally introduced in 2002.  The
+      version 1.0 of the format has the following restriction.
+      <UL>
+	<LI>You can only put numbers and comments that exactly start
+	  from the begining of the lines.</LI>
+	<LI>Blank lines are not allowed. Instead you must insert blank
+	  comment.</LI>
+      </UL>
+    </P>
+    <H1>2. Vector Stream Library</H1>
+    <P>
+      The Vector Stream library provides C89/C90 API and also provieds
+      C++03 API at this moment. The C API is accessible from C++ but
+      all functions in C API are located in the
+      namespace <CODE>pid</CODE>.
+    </P>
+    <H2>2.1 C API</H2>
+    <P>
+      The Vector Stream library provides the following functions. The
+      C APIs are defined in <CODE>&lt;vec.h&gt;</CODE> header. C++
+      users can include <CODE>&lt;vec++.hh&gt;</CODE> instead, to
+      use <EM>short-cuts</EM> to the C functions.
+    </P>
+    <H3>2.1.1 Writing header</H3>
+    <P>
+      <PRE>
+	extern int vec_put_header_to_file(FILE *fout);
+      </PRE>
+      This function puts valid header (i.e. <CODE>%!VCTR</CODE>...)
+      to <CODE>fout</CODE>.
+    </P>
+    <H3>2.1.2 Writing vector</H3>
+    <P>
+      <PRE>
+	extern int vec_put_nil_to_file(FILE *fout);
+      </PRE>
+      This function puts <CODE>nil</CODE> to <CODE>fout</CODE>.
+    </P>
+    <P>
+      <PRE>
+	extern int vec_put_float_vector_to_file(size_t n, const float *v, size_t s, FILE *fout);
+      </PRE>
+      <CODE>vec_put_float_vector_to_file</CODE> puts value
+      array <CODE>v</CODE> of size <CODE>n</CODE> to
+      file <CODE>fout</CODE>.  If <CODE>s</CODE> is more than 1, this
+      funciton puts <CODE>LF</CODE> every <CODE>s</CODE> elements;
+      otherwise this function puts each elements line by line.
+      C++ users can use this function with the short-cut name
+      <CODE>pid::put_vector</CODE>.
+    </P>
+    <P>
+      <PRE>
+	extern int vec_new_float_vector_from_file(size_t *n, float **v, FILE *fin);
+      </PRE>
+      <CODE>vec_new_float_vector_from_file</CODE> gets
+      vector <CODE>*v</CODE> of size <CODE>*n</CODE> from
+      file <CODE>fin</CODE>. Memory for <CODE>*v</CODE> is
+      automatically allocated.  C++ users can use this function with
+      the short-cut name <CODE>pid::new_vector</CODE>.
+    </P>
+    <P>
+      <PRE>
+	extern void vec_delete_float_vector(float *v);
+      </PRE>
+      After use of vectors, users are encouraged to clean up the
+      memory by using this function.  C++ users can use this function
+      with the short-cut name <CODE>pid::delete_vector</CODE>.
+    </P>
+    <P>
+      <PRE>
+	extern int vec_put_double_vector_to_file(size_t n, const double *v, size_t s, FILE *fout);
+	extern int vec_new_double_vector_from_file(size_t *n, double **v, FILE *fin);
+	extern void vec_delete_double_vector(double *v);
+      </PRE>
+      The above functions are <CODE>double</CODE> versions of the
+      put/new/delete functions. The short-cut names for C++ users are
+      same.
+    </P>
+
+    <H3>2.1.3 Writing hint and message</H3>
+
+    <P>
+      <PRE>
+	extern int vec_put_hint_to_file(const char *hint, int parameter, FILE *fout);
+      </PRE>
+      This function puts hint to the file <CODE>fout</CODE> in the
+      format of <CODE>%*hint=parameter</CODE>.
+    </P>
+
+    <P>
+      <PRE>
+	extern int vec_put_message_to_file(const char *message, FILE *fout);
+      </PRE>
+      This function puts message to the file <CODE>fout</CODE> in the
+      format of <CODE>%?message</CODE>. The <CODE>\n</CODE> characters
+      in <CODE>message</CODE> are ignored.
+    </P>
+
+    <P>
+      <PRE>
+	extern int vec_scan_messages_from_file_and_put_to_file(FILE *fin, FILE *fout);
+      </PRE>
+      This function scans any messages (lines that start
+      with <CODE>%?</CODE>) of file <CODE>fin</CODE> and puts them to
+      file <CODE>fout</CODE>.
+    </P>
+
+    <H3>2.1.4 Vector operations</H3>
+    <P>
+      <PRE>
+	extern int vec_slice_double_vector(double *a, const double *v, size_t offset, size_t length, size_t stride);
+      </PRE>
+      This function slices vector <CODE>v</CODE> and stores the sliced
+      vector to <CODE>a</CODE>. The memory for the sliced
+      vector <CODE>a</CODE> must be allocated <EM>before</EM> calling
+      this function.  The slicing parameters are
+      offset <CODE>offset</CODE>, length <CODE>length</CODE>, and
+      stride <CODE>stride</CODE>. This function is an alternative to
+      C++'s <CODE>std::slice</CODE>.
+    </P>
+    <P>
+      <PRE>
+	extern int vec_add_double_multi_vector_to_multi_vector(double *a, size_t s, size_t n1, const double *v1, size_t n2, const double *v2);
+	extern int vec_add_double_single_vector_to_multi_vector(double *a, size_t s, size_t n1, const double *v1, size_t n2, const double *v2);
+      </PRE>
+      These functions calculate sum of two vectors <CODE>v1</CODE>
+      (size <CODE>n1</CODE>) and <CODE>v2</CODE>
+      (size <CODE>n2</CODE>) and store the result to <CODE>a</CODE>.
+      The memory for resulting vector <CODE>a</CODE> must be
+      allocated <EM>before</EM> calling these functions.  The former
+      function takes the same size of vectors <CODE>v1</CODE>
+      and <CODE>v2</CODE> and each elements are added and stored in
+      the corresponding positions of <CODE>a</CODE>.  The latter
+      function takes smaller size of vector as <CODE>v1</CODE> and
+      repeats it for adding to <CODE>v2</CODE>.
+    </P>
+    <P>
+      <PRE>
+	extern int vec_multiply_double_multi_matrix_to_multi_vector(double *a, size_t s, size_t nm, const double *m, size_t nv, const double *v, int transpose);
+	extern int vec_multiply_double_single_matrix_to_multi_vector(double *a, size_t s, size_t nm, const double *m, size_t nv, const double *v, int transpose);
+      </PRE>
+      These functions calculate products of matrices <CODE>v1</CODE>
+      (size <CODE>n1</CODE>, stride <CODE>s</CODE>) and
+      vectors <CODE>v2</CODE> (size <CODE>n2</CODE>,
+      stride <CODE>s</CODE>), and store the result to <CODE>a</CODE>.
+      The memory for resulting vector <CODE>a</CODE> must be
+      allocated <EM>before</EM> calling these functions.  The former
+      function takes the same numbers of matrices <CODE>v1</CODE> and
+      vectors <CODE>v2</CODE>; each elements are multiplied and stored
+      in the corresponding positions of <CODE>a</CODE>.  The latter
+      function takes a single matrix as <CODE>v1</CODE> and repeats it
+      for multiplying to <CODE>v2</CODE>.
+    </P>
+    <H3>2.1.5 Error handler</H3>
+    <P>
+      <PRE>
+	typedef int (*vec_error_handler_t)(int error_type, const char *error_message);
+	extern vec_error_handler_t vec_set_error_handler(vec_error_handler_t new_error_handler);
+      </PRE>
+      If some error occurs in Vector Stream library, a default error
+      handler is invoked.  The default error handler leaves error
+      message on <CODE>stderr</CODE> and calls <CODE>exit(1)</CODE> if
+      the error is fatal, otherwise returns.  By using
+      the <CODE>vec_set_error_handler</CODE> function you can modify
+      the default behavior (e.g., you can throw exception if you are
+      using C++).  This function returns current error handler.
+    </P>
+    <H2>2.2 C++ API</H2>
+    <P>
+      The Vector Stream library provides C++ APIs on top of C APIs.
+      The functions and templates are provided
+      through <CODE>&lt;vec++.hh&gt;</CODE> header.
+    </P>
+    <H3>2.2.1 Short-cuts</H3>
+    <P>
+      C++ API of Vector Stream provides short-cut names to the C APIs.
+      All C APIs and their short-cut versions are declared
+      in <CODE>pid</CODE> namespace.
+    </P>
+    <H3>2.2.2 vector_loader class</H3>
+    <P>
+      The C++ API provides class template <CODE>vector_loader</CODE>.
+      The following example shows how to use this template.
+      <PRE>
+	#include &lt;iostream&gt;
+	#include &lt;vec++.hh&gt;
+        int main(int argc, char **argv) {
+          pid::vector_loader&lt;double&gt; *vl = new pid::vector_loader&lt;double&gt;(argv[2]);
+          std::valarray&lt;double&gt; *v = vl-&gt;values();
+          std::vector&lt;std::string&gt; *m = vl-&gt;messages();
+          std::vector&lt;std::string&gt;::const_iterator i = m-&gt;begin();
+          while (i != m-&gt;end()) {
+            std::cerr &lt;&lt; *i &lt;&lt; '\n';
+            ++i;
+          }
+          std::map&lt;std::string, std::string&gt; *h = vl-&gt;hints();
+          std::cerr &lt;&lt; (*h)["dimension"] &lt;&lt; '\n';
+          delete vl;
+        }
+      </PRE>
+      Unfortunately current implementation
+      of <CODE>vector_loader</CODE> scans the input
+      file <EM>twice.</EM>  This spoils the advantage of Vector Stream
+      file format in terms of its efficiency.  If the time is
+      critical, stick with C APIs for loading the file.
+    </P>
+    <H3>2.2.3 Paraeter analyzer</H3>
+    <P>
+      The following function template helps to break
+      collon-separated-values in <CODE>valarray</CODE>.
+      <PRE>
+	template &lt;typename T, typename C&gt; void parse_multiple_parameters(std::valarray&lt;T&gt; **v, C converter, char *s);
+      </PRE>
+      The <CODE>converter</CODE> is a <EM>functor</EM> (function-like
+      object) and must provide <CODE>T operator () (const std::string
+      &)</CODE>.  For example if the parameter was <CODE>s =
+      "1:2:3"</CODE> then
+      <PRE>
+	std::valarray&lt;double&gt; *parameters = 0;
+	pid::parse_multiple_parameters(&amp;parameters, pid::string_to_double(), s);
+      </PRE>
+      will give you new <CODE>std::valarray&lt;double&gt;</CODE> with
+      size 3, containing 1.0, 2.0, and 3.0.  In this example we use
+      pre-defined functor <CODE>string_to_double</CODE>, other
+      functors are also avilable: <CODE>string_to_string</CODE>
+      and <CODE>string_to_int</CODE>.
+    </P>
+    <H1>3. Vector Stream Tools</H1>
+    <P>
+      Vector Stream provides the following command-line tools.  These
+      commands print out help message if no arguments are given.
+    </P>
+    <H2>3.1 vectorize</H2>
+    <P>
+      Command <KBD>vectorize</KBD> reads text file and writes it in
+      Vector Stream file format to the standard output.
+    </P>
+    <H2>3.2 vcat</H2>
+    <P>
+      Command <KBD>vcat</KBD> reads Vector Stream file and writes it
+      in Vector Stream file format to the standard output.
+      If <KBD>-u</KBD> option is given, the command writes in plain
+      text format.
+    </P>
+    <H2>3.3 slice/gslice</H2>
+    <P>
+      Command <KBD>slice -o<EM>offset</EM> -l<EM>length</EM>
+	-s<EM>stride</EM> <EM>input.v</EM></KBD> slices input
+	vector <EM>input.v</EM> with offset <EM>offset</EM>,
+	length <EM>length</EM>, and stride <EM>stride</EM>.
+	If <EM>length</EM> is 0, the length is automatically
+	calculated.
+    </P>
+    <P>
+      Command <KBD>gslice -o<EM>offset</EM>
+	-L<EM>length1:length2[:...]</EM>
+	-S<EM>stride1:stride2[:...]</EM> <EM>input.v</EM></KBD> slices
+	input vector <EM>input.v</EM> with offset <EM>offset</EM>,
+	lengths <EM>length1, lenght2, ...</EM>, and
+	strides <EM>stride1, stride2, ...</EM>.  If <EM>length1</EM>
+	is 0, the length is automatically calculated.
+    </P>
+    <H2>3.4 splice</H2>
+    <P>
+      Command <KBD>splice <EM>input1.v</EM> <EM>input2.v</EM></KBD>
+      splices two input vectors.  The first element
+      of <EM>input1.v</EM> is first copied to output, and then the
+      first element of <EM>input2.v</EM> is copied to output. Next the
+      second element of <EM>input1.v</EM> is copied to the output,
+      then the second element of <EM>input2.v</EM> is copied... You
+      can give <KBD>-s<EM>stride</EM></KBD> option to specify stride.
+    </P>
+    <H2>3.5 add/multiply</H2>
+    <P>
+      Command <KBD>add <EM>input1.v</EM> <EM>input2.v</EM></KBD>
+      calculates sum of two vectors <EM>input1.v</EM>
+      and <EM>input2.v</EM> and outputs to the standard out.
+    </P>
+    <H2>3.6 statistics</H2>
+    <P>
+      Command <KBD>statistics</KBD> reports maximum value, minimum
+      value, average value, etc. of input vectors.
+    </P>
+    <H1>4. Install</H1>
+    <P>
+      Vector Stream is distributed as a source code, thus you must
+      compile the library/tools by yourself after you obtain the
+      source code.
+    </P>
+    <H2>4.1 How to get</H2>
+    <P>
+      Visit <A href='https://sourceforge.net/projects/vectorstream'>sourceforge.net</A>
+      to download the source code.
+      The source codes are under the control of SVN.
+    </P>
+    <H2>4.2 How to install</H2>
+    <P>
+      Vector Stream library provides <KBD>configure</KBD> script.  To
+      install library and supporting tools, try:
+      <KBD>./configure</KBD>, then <KBD>make</KBD>, and then <KBD>make
+      install</KBD>.
+    </P>
+    <H2>4.3 How to contact the author</H2>
+    <P>
+      You will be able to contact the author at kanaya (at) users
+      (dot) sourceforge (dot) net.
+    </P>
+    <H1>5. References</H1>
+    <P>
+      To be written.
+    </P>
+    <H1>6. Acknowledgement</H1>
+    <P>
+      This program/library has been developed under the support of:
+      <UL>
+	<LI>Prof. Kazuo Kawasaki, The PiD Lab., Graduate School of
+	  Engineering, Osaka University, Japan</LI>
+	<LI>Prof. Kosuke Sato, The SENS Lab., Graduate School of
+	  Engineering Science, Osaka University, Japan</LI>
+	<LI>Dr. Mark Lehner and Mr. Yukinori Kawae, Ancient Egypt
+	  Research Association, US</LI>
+      </UL>
+    </P>
+    <H1>7. Revision History</H1>
+    <UL>
+      <LI>20008-06-22: First version of this document.</LI>
+    </UL>
+    $Id$
+    <HR/>
+    <ADDRESS>kanaya (at) users (dot) sourceforge (dot) net</ADDRESS>
+  </BODY>
+</HTML>

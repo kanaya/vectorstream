@@ -1,0 +1,48 @@
+2008-06-24  Ichi Kanaya  <kanaya@users.sourceforge.net>
+
+	* src/gslice.cc (main): when no file name was specified, and
+	lengths and strides parameter were given, gslice reads from stdin.
+
+	* src/slice.cc (main): when no file name was specified, slice
+	reads from stdin.
+
+	* src/statistics.cc (main): when no file name was specified,
+	statistics reads from stdin.
+
+	* src/vcat.cc (main): when no file name was specified,
+	vcat reads from stdin.
+
+2008-06-23  Ichi Kanaya  <kanaya@users.sourceforge.net>
+
+	* src/vectorize.cc (main): when no file name was specified,
+	vectorize reads from stdin.  (Now you don't have to remember
+	giving '-' parameter for reading from stdin.)
+
+	* src/Makefile.am (include_PROGRAMS): make install now installs
+	vec++.h.
+
+2008-06-22  Ichi Kanaya  <kanaya@users.sourceforge.net>
+
+	* src/vec++.hh (vector_loader): new class vector_loader added.
+	The following new function templates and class templates were
+	added via src/vec++.hh.
+	Class:
+	- template <typename real> class vector_loader;
+	Functors:
+	- class string_to_string;
+	- class string_to_int;
+	- class string_to_dobule;
+	Functions:
+	- template <typename T, typename C> void
+	  parse_multiple_parameters(std::valarrayT> **v, C converter, char *s);
+
+	* src/vec++.h: short-cut names for vec.c added for C++ users.
+	Since C++ users can have an advantage of funciton overload,
+	we can offer shorter names of functions provided in vec.c.
+	Header src/vec++.h defines short-cuts to those functions in vec.c.
+
+2008-06-21  Ichi Kanaya  <kanaya@users.sourceforge.net>
+
+	* src/*: refinement of codes.
+	All codes that used to have .cxx suffixes have now .cc suffixes.
+
